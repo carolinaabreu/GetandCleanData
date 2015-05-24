@@ -1,5 +1,15 @@
-No other transformations than the ones done in the script has been made on the data. The script merges many the different files, into one single dataset as it has been stated in the exercise (see readme for the exercise's description).
+##Codebook for the Getting and Cleaning Data Project
 
-The input is described in the README.txt of the downloaded input (see "UCI HAR Dataset/README.txt" file once the input is downloaded).
+The run_analysis code will read the 'Human Activity Recognition Using Smartphones Data Set' avaliable at https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip .
 
-The output represents the average of each variable for each activity and each subject. It is a table ; each variable is represented by a column, and each activity / subject is represented by a row. The columns names are slightly modified from the "features.txt" input file content: all parenthesis are removed. The row names merge the subject and the activity. For instance, the row "1_LAYING" describes the means of the subject 1 for the LAYING activity.
+And:
+
+It merges both training and test sets (/train/X_train.txt and /test/X_test.txt).
+It includes the subjects who performed the activities (/train/subject_train.txt and /test/subject_test.txt).
+It does NOT include the Inertial Signals.
+It properly labels all the data.
+It subsets the data using only subjects and measurement that are mean values or standard deviation values.
+It does NOT use in the data subset any of the 'angle' values, although they are calculated using mean values.
+It creates a tidy data set with the average of each of the variables on the data subset for each activity and each subject.
+It exports the final tidy data set to a 'tidyData.csv' .
+In the final file you will have a row for the average of each measured variable of the subset and each column represents a SUBJECT.ACTIVITY .
