@@ -1,79 +1,86 @@
-# Run the analysis -> creates the tiny data set and saves it under "tiny.txt"
+#Load plyr, used for the join function
 
-# Reads the base sets (files with begining by X) in an optimal way
-# * filePath: path of the file
-# * filteredFeatures: ids of the features to be extracted
-# * features: all features names
-readBaseSet <- function(filePath, filteredFeatures, features) {
-        cols_widths <- rep(-16, length(features))
-        cols_widths[filteredFeatures] <- 16
-        rawSet <- read.fwf(
-                file=filePath,
-                widths=cols_widths,
-                col.names=features[filteredFeatures])
+library(plyr)
+
+#Set Dataset Path relative to the workind directory
+datasetPath <- 'UCI HAR Dataset'
+
+#Set FilePaths - Note that there is a 'train' and a 'test' subdirectories
+featuresFilename <- file.path(datasetPath, 'features.txt')
+labelFilename <- file.path(datasetPath, 'activity_labels.txt')
+trainLabelFilename <- file.path(datasetPath, 'train/y_train.txt')
+trainSetFilename <- file.path(datasetPath, 'train/x_train.txt')
+trainSubjectFilename <- file.path(datasetPath, 'train/subject_train.txt')
+testLabelFilename <- file.path(datasetPath, 'test/y_test.txt')
+testSetFilename <- file.path(datasetPath, 'test/x_test.txt')
+testSubjectFilename <- file.path(datasetPath, 'test/subject_test.txt')
+
+#Read Features and add 'labels' and 'subject'
+#to the beggining of the list
+features <- read.table(featuresFilename)
+features <- features[2]
+colnames(features) <-'features'
+features <- rbind(data.frame(features=c('labels','subject')),features)
+
+#Read Labels
+labels <- read.table(labelFilename)
+
+#Create trainData dataframe with Train Labels, Train Subjects and Train DataSet
+trainData<-cbind(read.table(trainLabelFilename),read.table(trainSubjectFilename),read.table(trainSetFilename))
+
+#Create testData dataframe with Test Labels, Test Subjects and Test DataSet
+testData<-cbind(read.table(testLabelFilename),read.table(testSubjectFilename),read.table(testSetFilename))
+
+#Remove Paths from memory
+rm(datasetPath,featuresFilename,labelFilename,trainLabelFilename,trainSetFilename,trainSubjectFilename)
+rm(testLabelFilename,testSetFilename,testSubjectFilename)
+
+#Create completeData by joining trainData and testData
+#and remove them from memory
+completeData<-join(trainData,testData)
+rm(trainData,testData)
+
+#Name the columns of completeData using the loaded Features
+#and remove it from memory
+names(completeData)<-features[1:563,]
+rm(features)
+
+#Factor completeData with loaded Labels and remove it from memory
+completeData$labels <- factor(completeData$labels, levels=labels[,1], labels=labels[,2])
+rm(labels)
+
+#useCol wil list the indexes of the columns of completeData we will use
+#initialize useCol with 1 and 2 as they we wil keep
+#both 'labels' and 'subjects' columns
+useCol<-c(1,2)
+
+#For all the remaining columns in completeData, check if they contain
+#'mean' or 'std' and, if so, add them to useCol
+for (i in 3:length(completeData)){
+    if(length(grep('mean',names(completeData)[i]))==1){        
+        useCol<-append(useCol,i)        
+    }else if(length(grep('std',names(completeData)[i]))==1){
+        useCol<-append(useCol,i)        
+    }
 }
 
-# Reads an additional file (other than the base sets). Used for subjects and labels.
-# * dataDirectory: directory of data
-# * filePath: relative path of the file. For instance if its value is "subject" it
-#   will read "UCI HAR Dataset/test/subject_test.txt" and
-# "UCI HAR Dataset/train/subject_train.txt", and merge them
-readAdditionalFile <- function(dataDirectory, filePath) {
-        filePathTest <- paste(dataDirectory, "/test/", filePath, "_test.txt", sep="")
-        filePathTrain <- paste(dataDirectory, "/train/", filePath, "_train.txt", sep="")
-        data <- c(read.table(filePathTest)[,"V1"], read.table(filePathTrain)[,"V1"])
-        data
-}
+#Set partialData a subset of completeData with the useCol columns
+partialData<-completeData[,useCol]
 
-# Correct a feature name - makes it nicer for dataframe columns (removes parentheses)
-# because otherwise they are transformed to dots.
-# * featureName: name of the feature
-correctFeatureName <- function(featureName) {
-        featureName <- gsub("\\(", "", featureName)
-        featureName <- gsub("\\)", "", featureName)
-        featureName
-}
+#remove completeData and useCol
+rm(completeData,useCol)
 
-# Read sets and returns a complete sets
-# * dataDirectory: directory of data
-readSets <- function(dataDirectory) {
-        # Adding main data files (X_train and X_test)
-        featuresFilePath <- paste(dataDirectory, "/features.txt", sep="")
-        features <- read.table(featuresFilePath)[,"V2"]
-        filteredFeatures <- sort(union(grep("mean\\(\\)", features), grep("std\\(\\)", features)))
-        features <- correctFeatureName(features)
-        set <- readBaseSet(paste(dataDirectory, "/test/X_test.txt", sep=""), filteredFeatures, features)
-        set <- rbind(set, readBaseSet(paste(dataDirectory, "/train/X_train.txt", sep=""), filteredFeatures, features))
-        
-        # Adding subjects
-        set$subject <- readAdditionalFile("UCI HAR Dataset", "subject")
-        
-        # Adding activities
-        activitiesFilePath <- paste(dataDirectory, "/activity_labels.txt", sep="")
-        activities <- read.table(activitiesFilePath)[,"V2"]
-        set$activity <- activities[readAdditionalFile("UCI HAR Dataset", "y")]
-        
-        set
-}
+#split partialData by subject.labels and assign to splitData
+splitData<-split(partialData,list(partialData$subject,partialData$labels))
 
-# From sets, creates the tidy dataset (a summary)
-# * dataDirectory: directory of data
-createSummaryDataset <- function(dataDirectory) {
-        sets <- readSets(dataDirectory)
-        sets_x <- sets[,seq(1, length(names(sets)) - 2)]
-        summary_by <- by(sets_x,paste(sets$subject, sets$activity, sep="_"), FUN=colMeans)
-        summary <- do.call(rbind, summary_by)
-        summary
-}
+#generate final tidyData with the mean of every variable of splitData
+tidyData<-sapply(splitData, function(x) colMeans(x[3:length(names(partialData))]))
 
-dataDirectory <- "UCI HAR Dataset"
-if (!file.exists(dataDirectory)) {
-        url <- "https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip "
-        tmp_file <- "./temp.zip"
-        download.file(url,tmp_file, method="curl")
-        unzip(tmp_file, exdir="./")
-        unlink(tmp_file)
-}
+#remove splitData and partialData
+rm(splitData,partialData)
 
-summary <- createSummaryDataset(dataDirectory)
-write.table(summary, "tidy.txt")
+#write tidyData as a csv to tidyData.csv
+write.csv(tidyData, file="./tidyData.csv")
+
+#remove tidyData
+rm(tidyData)
